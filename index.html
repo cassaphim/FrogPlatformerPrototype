@@ -1,0 +1,1927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FROG - Browser Prototype</title>
+  <style>
+    /* =========================================================
+       FROG — CSS / VISUAL LAYER
+       This section controls the look of the game, menus, buttons,
+       and lightboxes. Designers can safely tweak colors, fonts,
+       spacing, and sizes here without touching game logic.
+       ========================================================= */
+
+    :root {
+      --frog-green: #77e36c;
+      --frog-blue: #56b8ff;
+      --dark: #10151e;
+      --panel: rgba(13, 18, 28, 0.88);
+      --text: #f5ffe8;
+      --muted: #9fb3c8;
+      --accent: #ffe66d;
+      --danger: #ff5c7a;
+      --pixel-shadow: 0 6px 0 rgba(0,0,0,0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #070b12;
+      color: var(--text);
+      font-family: "Courier New", Courier, monospace;
+      image-rendering: pixelated;
+      user-select: none;
+    }
+
+    #gameShell {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(86,184,255,0.16), transparent 28%),
+        radial-gradient(circle at 80% 20%, rgba(119,227,108,0.13), transparent 24%),
+        linear-gradient(#121a2a, #050810);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    /* -------------------------
+       HUD: player lives only
+       ------------------------- */
+    #hud {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      z-index: 10;
+      display: none;
+      gap: 8px;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .heart {
+      width: 28px;
+      height: 28px;
+      image-rendering: pixelated;
+      filter: drop-shadow(0 3px 0 rgba(0,0,0,0.35));
+    }
+
+    .heart.empty {
+      opacity: 0.22;
+      filter: grayscale(1) drop-shadow(0 3px 0 rgba(0,0,0,0.35));
+    }
+
+    /* -------------------------
+       Menu and lightbox layer
+       ------------------------- */
+    .screenOverlay {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(2, 4, 9, 0.72);
+      backdrop-filter: blur(4px);
+    }
+
+    .screenOverlay.isVisible { display: flex; }
+
+    .menuPanel,
+    .lightboxPanel {
+      min-width: min(520px, 88vw);
+      padding: 34px;
+      border: 4px solid rgba(245,255,232,0.9);
+      background: var(--panel);
+      box-shadow: var(--pixel-shadow);
+      text-align: center;
+    }
+
+    .logo {
+      margin: 0 0 28px;
+      font-size: clamp(58px, 11vw, 120px);
+      line-height: 0.88;
+      letter-spacing: 0.08em;
+      color: var(--frog-green);
+      text-shadow:
+        5px 5px 0 #0b6e5a,
+        10px 10px 0 rgba(0,0,0,0.36);
+    }
+
+    .subtitle {
+      margin: -14px 0 28px;
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .buttonStack {
+      display: grid;
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    button {
+      cursor: pointer;
+      border: 3px solid var(--text);
+      background: #1b2638;
+      color: var(--text);
+      padding: 14px 18px;
+      font: bold 18px "Courier New", Courier, monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      box-shadow: 0 5px 0 rgba(0,0,0,0.45);
+    }
+
+    button:hover,
+    button:focus {
+      outline: none;
+      background: var(--accent);
+      color: #1b2638;
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(4px);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.45);
+    }
+
+    .lightboxTitle {
+      margin: 0 0 10px;
+      font-size: 28px;
+      color: var(--accent);
+    }
+
+    .lightboxCopy {
+      color: var(--muted);
+      margin-bottom: 26px;
+    }
+
+    label {
+      display: block;
+      text-align: left;
+      margin-bottom: 10px;
+      color: var(--text);
+      font-weight: bold;
+      letter-spacing: 0.04em;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--frog-green);
+    }
+
+    #exitNotice {
+      display: none;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .helpText {
+      position: absolute;
+      left: 18px;
+      bottom: 18px;
+      z-index: 10;
+      display: none;
+      color: rgba(245,255,232,0.68);
+      font-size: 13px;
+      line-height: 1.5;
+      pointer-events: none;
+      text-shadow: 0 2px 0 rgba(0,0,0,0.6);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="gameShell">
+    <!-- Canvas is where the actual game world is drawn. -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD: three pixel hearts. JavaScript swaps full/empty state. -->
+    <div id="hud" aria-label="Lives HUD"></div>
+
+    <div id="helpText" class="helpText">
+      Move: Arrow Keys / WASD · Jump: Space · Switch Color: Enter / Shift · Pause: Esc
+    </div>
+
+    <!-- START MENU -->
+    <section id="menuScreen" class="screenOverlay isVisible" aria-label="Start Menu">
+      <div class="menuPanel">
+        <h1 class="logo">FROG</h1>
+        <p class="subtitle">Color-switch platforming prototype</p>
+        <div class="buttonStack">
+          <button id="startButton">Start</button>
+          <button id="levelSelectButton">Level Select</button>
+          <button id="settingsButton">Settings</button>
+          <button id="exitButton">Exit</button>
+        </div>
+        <p id="exitNotice">Browser security may prevent tabs from closing unless this page was opened by script. The game has been safely paused.</p>
+      </div>
+    </section>
+
+
+    <!-- LEVEL SELECT LIGHTBOX -->
+    <section id="levelSelectLightbox" class="screenOverlay" aria-label="Level Select">
+      <div class="lightboxPanel">
+        <h2 class="lightboxTitle">Level Select</h2>
+        <p class="lightboxCopy">Choose any level to play.</p>
+        <div id="levelSelectButtons" class="buttonStack"></div>
+        <div class="buttonStack" style="margin-top:20px;">
+          <button id="closeLevelSelectButton">Back</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS LIGHTBOX -->
+    <section id="settingsLightbox" class="screenOverlay" aria-label="Settings">
+      <div class="lightboxPanel">
+        <h2 class="lightboxTitle">Settings</h2>
+        <p class="lightboxCopy">Adjust the master volume for menu, level, and game over audio.</p>
+        <label for="volumeSlider">Master Volume: <span id="volumeValue">80%</span></label>
+        <input id="volumeSlider" type="range" min="0" max="100" value="80" />
+
+        <label for="difficultySelect" style="margin-top:24px;">Difficulty</label>
+        <select id="difficultySelect" style="
+          width:100%;
+          padding:12px;
+          border:3px solid var(--text);
+          background:#1b2638;
+          color:var(--text);
+          font:bold 16px 'Courier New', Courier, monospace;
+          letter-spacing:0.06em;
+          text-transform:uppercase;
+          image-rendering:pixelated;">
+          <option value="normal" selected>Normal</option>
+          <option value="hard">Hard</option>
+        </select>
+        <p class="lightboxCopy" style="margin-top:14px;margin-bottom:8px;text-align:left;">
+          Normal reduces passive sliding on steep angled platforms. Hard keeps the current gravity-driven behavior.
+        </p>
+
+        <div class="buttonStack">
+          <button id="closeSettingsButton">Close</button>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- LOADING SCREEN BETWEEN LEVELS -->
+    <section id="loadingScreen" class="screenOverlay" aria-label="Loading Screen">
+      <div class="lightboxPanel">
+        <h2 id="loadingTitle" class="lightboxTitle">Loading</h2>
+        <p id="loadingCopy" class="lightboxCopy">Preparing the next pond...</p>
+      </div>
+    </section>
+
+    <!-- PAUSE MENU -->
+    <section id="pauseLightbox" class="screenOverlay" aria-label="Pause Menu">
+      <div class="lightboxPanel">
+        <h2 class="lightboxTitle">Paused</h2>
+        <p class="lightboxCopy">Take a breath before the next leap.</p>
+        <div class="buttonStack">
+          <button id="resumeButton">Resume</button>
+          <button id="pauseRestartButton">Restart Level</button>
+          <button id="pauseSettingsButton">Settings</button>
+          <button id="pauseExitButton">Exit Game</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- GAME OVER LIGHTBOX -->
+    <section id="gameOverLightbox" class="screenOverlay" aria-label="Game Over">
+      <div class="lightboxPanel">
+        <h2 class="lightboxTitle">Game Over</h2>
+        <p class="lightboxCopy">The frog lost all 3 lives.</p>
+        <div class="buttonStack">
+          <button id="restartButton">Restart</button>
+          <button id="menuButton">Menu</button>
+          <button id="gameOverExitButton">Exit</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    "use strict";
+
+    /* =========================================================
+       FROG — WEB BROWSER PROTOTYPE
+       ---------------------------------------------------------
+       HOW THIS FILE IS ORGANIZED
+       1. CONFIG: easy-to-edit values for colors, level, audio
+       2. HELPERS: reusable math and input utilities
+       3. ASSET MANAGER: sprite/audio loading and placeholders
+       4. UI MANAGER: menus, settings, HUD, lightboxes
+       5. GAME OBJECTS: player, platforms, checkpoints, goal
+       6. LEVEL DATA: first level layout and future expansion hooks
+       7. GAME ENGINE: update loop, drawing, state changes
+       ========================================================= */
+
+
+    /* =========================================================
+       1. CONFIG — DESIGNER-FRIENDLY TUNING VALUES
+       Change these values to tune game feel, colors, asset files,
+       canvas scale, and audio paths.
+       ========================================================= */
+
+    const CONFIG = {
+      canvasPixelScale: 3, // Lower = sharper pixel grid; higher = larger virtual pixels.
+
+      // The two color states. The frog can only stand on matching platforms.
+      colors: {
+        green: "#77e36c",
+        blue: "#56b8ff"
+      },
+
+      darkPlatformColor: "#172033",
+      backgroundSkyTop: "#17213a",
+      backgroundSkyBottom: "#07101b",
+
+      player: {
+        width: 34,
+        height: 28,
+        speed: 290,
+        airControl: 0.72,
+        jumpVelocity: -650,
+        gravity: 1850,
+        terminalVelocity: 980,
+        coyoteTime: 0.10,     // Small grace window after leaving a platform.
+        jumpBuffer: 0.12      // Lets jump input register just before landing.
+      },
+
+      level: {
+        fallDeathY: 980,      // If frog falls below this world Y, lose a life.
+        startLives: 3
+      },
+
+      // Difficulty can be changed in Settings.
+      // normal: reduces passive sliding on steep platforms.
+      // hard: preserves gravity-driven behavior.
+      difficulty: "normal",
+
+      // Color-toggle platform defaults.
+      // Designers can tune the stable duration and warning countdown here,
+      // or override per platform in the LEVELS data below.
+      togglePlatforms: {
+        defaultStableDuration: 3.0,
+        warningPulses: [0.5, 0.25, 0.125]
+      },
+
+      // Wall / ceiling attachment tuning.
+      attachment: {
+        climbSpeed: 165,
+        slideSpeed: 35,
+        // Jumping from a wall/ceiling now uses a standard upward hop only.
+        // No extra opposite-direction momentum is added.
+        attachJumpVertical: -585
+      },
+
+      // Audio placeholders. Replace "" with your actual files, like:
+      // menuMusic: "audio/menu-theme.mp3"
+      audio: {
+        menuMusic: "",
+        levelMusic: "",
+        gameOverMusic: "",
+        jumpSfx: "",
+        switchSfx: "",
+        deathSfx: "",
+        goalSfx: ""
+      }
+    };
+
+
+    /* =========================================================
+       2. HELPERS — SMALL REUSABLE UTILITY FUNCTIONS
+       These avoid repeating tiny math tasks throughout the code.
+       ========================================================= */
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const degToRad = (deg) => deg * Math.PI / 180;
+
+    function createVector(x = 0, y = 0) {
+      return { x, y };
+    }
+
+    // Converts a world point into a platform's local rotated space.
+    function worldToLocal(point, platform) {
+      const angle = -platform.angle;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const dx = point.x - platform.x;
+      const dy = point.y - platform.y;
+
+      return {
+        x: dx * cos - dy * sin,
+        y: dx * sin + dy * cos
+      };
+    }
+
+    // Converts a platform-local point back to world space.
+    function localToWorld(point, platform) {
+      const cos = Math.cos(platform.angle);
+      const sin = Math.sin(platform.angle);
+
+      return {
+        x: platform.x + point.x * cos - point.y * sin,
+        y: platform.y + point.x * sin + point.y * cos
+      };
+    }
+
+    // A simple pixel-heart SVG data URL used by the HUD.
+    function heartSvg() {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+          <rect width="16" height="16" fill="none"/>
+          <path fill="#ff5c7a" d="M3 2h3v2h1v1h2V4h1V2h3v1h1v4h-1v2h-1v1h-1v1h-1v1H9v1H7v-1H6v-1H5v-1H4V9H3V7H2V3h1z"/>
+          <path fill="#ffb0be" d="M4 3h2v1H4z"/>
+          <path fill="#992a42" d="M12 4h1v3h-1zM10 10h1v1h-1zM8 12h1v1H8z"/>
+        </svg>`;
+      return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    }
+
+
+    /* =========================================================
+       3. INPUT MANAGER — KEYBOARD CONTROLS
+       Stores which keys are down, pressed this frame, or released.
+       This makes controls reliable and easy to expand later.
+       ========================================================= */
+
+    class InputManager {
+      constructor() {
+        this.down = new Set();
+        this.pressed = new Set();
+
+        window.addEventListener("keydown", (event) => {
+          const key = event.key.toLowerCase();
+          const gameplayKeys = ["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s", "enter", "shift", "escape"];
+
+          if (gameplayKeys.includes(key)) event.preventDefault();
+
+          if (!this.down.has(key)) {
+            this.pressed.add(key);
+          }
+          this.down.add(key);
+        });
+
+        window.addEventListener("keyup", (event) => {
+          this.down.delete(event.key.toLowerCase());
+        });
+      }
+
+      isDown(...keys) {
+        return keys.some(key => this.down.has(key.toLowerCase()));
+      }
+
+      wasPressed(...keys) {
+        return keys.some(key => this.pressed.has(key.toLowerCase()));
+      }
+
+      clearFramePresses() {
+        this.pressed.clear();
+      }
+    }
+
+
+    /* =========================================================
+       4. AUDIO MANAGER — MUSIC AND SOUND PLACEHOLDERS
+       Replace CONFIG.audio paths with real files when ready.
+       Master volume is controlled from the Settings lightbox.
+       ========================================================= */
+
+    class AudioManager {
+      constructor(audioConfig) {
+        this.masterVolume = 0.8;
+        this.tracks = {};
+        this.sfx = {};
+        this.currentMusic = null;
+
+        this.loadAudio(audioConfig);
+      }
+
+      loadAudio(audioConfig) {
+        const musicKeys = ["menuMusic", "levelMusic", "gameOverMusic"];
+        const sfxKeys = ["jumpSfx", "switchSfx", "deathSfx", "goalSfx"];
+
+        musicKeys.forEach(key => {
+          if (!audioConfig[key]) return;
+          const audio = new Audio(audioConfig[key]);
+          audio.loop = true;
+          audio.volume = this.masterVolume;
+          this.tracks[key] = audio;
+        });
+
+        sfxKeys.forEach(key => {
+          if (!audioConfig[key]) return;
+          const audio = new Audio(audioConfig[key]);
+          audio.volume = this.masterVolume;
+          this.sfx[key] = audio;
+        });
+      }
+
+      setMasterVolume(value) {
+        this.masterVolume = clamp(value, 0, 1);
+
+        Object.values(this.tracks).forEach(audio => audio.volume = this.masterVolume);
+        Object.values(this.sfx).forEach(audio => audio.volume = this.masterVolume);
+      }
+
+      playMusic(key) {
+        if (this.currentMusic) {
+          this.currentMusic.pause();
+          this.currentMusic.currentTime = 0;
+        }
+
+        const track = this.tracks[key];
+        if (!track) return; // Safe no-op when no audio file has been added yet.
+
+        this.currentMusic = track;
+        track.volume = this.masterVolume;
+        track.play().catch(() => {
+          // Browsers may block autoplay until the user interacts.
+        });
+      }
+
+      stopMusic() {
+        if (!this.currentMusic) return;
+        this.currentMusic.pause();
+        this.currentMusic.currentTime = 0;
+        this.currentMusic = null;
+      }
+
+      playSfx(key) {
+        const sound = this.sfx[key];
+        if (!sound) return;
+
+        sound.currentTime = 0;
+        sound.volume = this.masterVolume;
+        sound.play().catch(() => {});
+      }
+    }
+
+
+    /* =========================================================
+       5. ASSET MANAGER — PIXEL FROG SPRITE SHEET
+       The prototype generates a simple cute frog sprite sheet in
+       code. Later, replace this with an image file by setting:
+       this.frogSprite.src = "art/frog-sprite-sheet.png";
+       Sprite layout is documented below.
+       ========================================================= */
+
+    class AssetManager {
+      constructor() {
+        this.frogSprite = new Image();
+        this.frogSprite.src = this.generateFrogSpriteSheet();
+      }
+
+      generateFrogSpriteSheet() {
+        /*
+          Sprite sheet layout:
+          - 4 frames across
+          - 2 rows
+          - Row 0 = green frog
+          - Row 1 = blue frog
+          - Each frame = 32x32 pixels
+
+          Frame 0: idle
+          Frame 1: hop/walk 1
+          Frame 2: jump
+          Frame 3: blink/land
+        */
+        const frame = 32;
+        const sheet = document.createElement("canvas");
+        sheet.width = frame * 4;
+        sheet.height = frame * 2;
+
+        const ctx = sheet.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+
+        const palettes = [
+          { body: CONFIG.colors.green, shadow: "#2a9b55", belly: "#d7ffd1" },
+          { body: CONFIG.colors.blue, shadow: "#1f76c5", belly: "#d5f2ff" }
+        ];
+
+        palettes.forEach((palette, row) => {
+          for (let col = 0; col < 4; col++) {
+            this.drawFrogFrame(ctx, col * frame, row * frame, palette, col);
+          }
+        });
+
+        return sheet.toDataURL();
+      }
+
+      drawFrogFrame(ctx, ox, oy, palette, frameIndex) {
+        // Draw with oversized rectangles to create a pixel art look.
+        const px = (x, y, w, h, color) => {
+          ctx.fillStyle = color;
+          ctx.fillRect(ox + x, oy + y, w, h);
+        };
+
+        const hopOffset = frameIndex === 1 ? 1 : 0;
+        const jumpOffset = frameIndex === 2 ? -2 : 0;
+        const blink = frameIndex === 3;
+
+        // Shadow feet
+        px(5, 22 + hopOffset, 7, 4, palette.shadow);
+        px(20, 22 - hopOffset, 7, 4, palette.shadow);
+
+        // Body
+        px(7, 13 + jumpOffset, 18, 10, palette.body);
+        px(5, 16 + jumpOffset, 22, 7, palette.body);
+        px(9, 19 + jumpOffset, 14, 5, palette.belly);
+
+        // Head
+        px(6, 8 + jumpOffset, 20, 10, palette.body);
+        px(9, 6 + jumpOffset, 5, 5, palette.body);
+        px(18, 6 + jumpOffset, 5, 5, palette.body);
+
+        // Eyes
+        if (blink) {
+          px(10, 9 + jumpOffset, 4, 1, "#10202a");
+          px(19, 9 + jumpOffset, 4, 1, "#10202a");
+        } else {
+          px(10, 7 + jumpOffset, 3, 3, "#ffffff");
+          px(19, 7 + jumpOffset, 3, 3, "#ffffff");
+          px(11, 8 + jumpOffset, 1, 1, "#111111");
+          px(20, 8 + jumpOffset, 1, 1, "#111111");
+        }
+
+        // Smile
+        px(13, 15 + jumpOffset, 1, 1, "#10202a");
+        px(18, 15 + jumpOffset, 1, 1, "#10202a");
+        px(14, 16 + jumpOffset, 4, 1, "#10202a");
+      }
+    }
+
+
+    /* =========================================================
+       6. UI MANAGER — MENUS, SETTINGS, HUD, GAME OVER
+       Keeps all DOM/menu work out of the core game engine.
+       ========================================================= */
+
+    class UIManager {
+      constructor(game, audio) {
+        this.game = game;
+        this.audio = audio;
+
+        this.menuScreen = document.getElementById("menuScreen");
+        this.settingsLightbox = document.getElementById("settingsLightbox");
+        this.levelSelectLightbox = document.getElementById("levelSelectLightbox");
+        this.levelSelectButtons = document.getElementById("levelSelectButtons");
+        this.gameOverLightbox = document.getElementById("gameOverLightbox");
+        this.pauseLightbox = document.getElementById("pauseLightbox");
+        this.loadingScreen = document.getElementById("loadingScreen");
+        this.loadingTitle = document.getElementById("loadingTitle");
+        this.loadingCopy = document.getElementById("loadingCopy");
+        this.hud = document.getElementById("hud");
+        this.helpText = document.getElementById("helpText");
+        this.exitNotice = document.getElementById("exitNotice");
+
+        this.volumeSlider = document.getElementById("volumeSlider");
+        this.volumeValue = document.getElementById("volumeValue");
+        this.difficultySelect = document.getElementById("difficultySelect");
+
+        this.createHearts();
+        this.bindButtons();
+        this.populateLevelSelect();
+      }
+
+      createHearts() {
+        this.hud.innerHTML = "";
+        for (let i = 0; i < CONFIG.level.startLives; i++) {
+          const img = document.createElement("img");
+          img.className = "heart";
+          img.src = heartSvg();
+          img.alt = "life";
+          this.hud.appendChild(img);
+        }
+      }
+
+      bindButtons() {
+        document.getElementById("startButton").addEventListener("click", () => this.game.startLevel());
+        document.getElementById("levelSelectButton").addEventListener("click", () => this.showLevelSelect());
+        document.getElementById("closeLevelSelectButton").addEventListener("click", () => this.hideLevelSelect());
+        document.getElementById("settingsButton").addEventListener("click", () => this.showSettings());
+        document.getElementById("closeSettingsButton").addEventListener("click", () => this.hideSettings());
+
+        document.getElementById("exitButton").addEventListener("click", () => this.game.exitGame());
+        document.getElementById("gameOverExitButton").addEventListener("click", () => this.game.exitGame());
+
+        document.getElementById("restartButton").addEventListener("click", () => this.game.restartLevel());
+        document.getElementById("menuButton").addEventListener("click", () => this.game.returnToMenu());
+
+        // Pause menu buttons.
+        document.getElementById("resumeButton").addEventListener("click", () => this.game.resumeGame());
+        document.getElementById("pauseRestartButton").addEventListener("click", () => this.game.restartLevel());
+        document.getElementById("pauseSettingsButton").addEventListener("click", () => this.showSettings());
+        document.getElementById("pauseExitButton").addEventListener("click", () => this.game.exitGame());
+
+        this.volumeSlider.addEventListener("input", () => {
+          const volume = Number(this.volumeSlider.value) / 100;
+          this.volumeValue.textContent = `${this.volumeSlider.value}%`;
+          this.audio.setMasterVolume(volume);
+        });
+
+        this.difficultySelect.addEventListener("change", () => {
+          this.game.setDifficulty(this.difficultySelect.value);
+        });
+      }
+
+      populateLevelSelect() {
+        /*
+          Level Select is generated from LEVELS, so adding Level 6 later only
+          requires adding another level object to LEVELS. No menu rewrite needed.
+        */
+        this.levelSelectButtons.innerHTML = "";
+
+        LEVELS.forEach((level, index) => {
+          const button = document.createElement("button");
+          button.textContent = `Level ${index + 1}`;
+          button.title = level.name;
+          button.addEventListener("click", () => {
+            this.game.loadLevelFromSelect(index);
+          });
+
+          this.levelSelectButtons.appendChild(button);
+        });
+      }
+
+      showLevelSelect() {
+        this.levelSelectLightbox.classList.add("isVisible");
+      }
+
+      hideLevelSelect() {
+        this.levelSelectLightbox.classList.remove("isVisible");
+      }
+
+      showMenu() {
+        this.menuScreen.classList.add("isVisible");
+        this.levelSelectLightbox.classList.remove("isVisible");
+        this.gameOverLightbox.classList.remove("isVisible");
+        this.pauseLightbox.classList.remove("isVisible");
+        this.loadingScreen.classList.remove("isVisible");
+        this.hud.style.display = "none";
+        this.helpText.style.display = "none";
+      }
+
+      hideMenu() {
+        this.menuScreen.classList.remove("isVisible");
+        this.exitNotice.style.display = "none";
+      }
+
+      showSettings() {
+        this.settingsLightbox.classList.add("isVisible");
+      }
+
+      hideSettings() {
+        this.settingsLightbox.classList.remove("isVisible");
+      }
+
+      showGameOver() {
+        this.gameOverLightbox.classList.add("isVisible");
+        this.pauseLightbox.classList.remove("isVisible");
+        this.loadingScreen.classList.remove("isVisible");
+        this.hud.style.display = "none";
+        this.helpText.style.display = "none";
+      }
+
+      hideGameOver() {
+        this.gameOverLightbox.classList.remove("isVisible");
+      }
+
+      showPause() {
+        this.pauseLightbox.classList.add("isVisible");
+      }
+
+      hidePause() {
+        this.pauseLightbox.classList.remove("isVisible");
+      }
+
+      showLoading(levelIndex, levelName) {
+        this.loadingTitle.textContent = `Loading Level ${levelIndex + 1}`;
+        this.loadingCopy.textContent = levelName;
+        this.loadingScreen.classList.add("isVisible");
+        this.pauseLightbox.classList.remove("isVisible");
+        this.gameOverLightbox.classList.remove("isVisible");
+        this.hud.style.display = "none";
+        this.helpText.style.display = "none";
+      }
+
+      hideLoading() {
+        this.loadingScreen.classList.remove("isVisible");
+      }
+
+      showHud() {
+        this.hud.style.display = "flex";
+        this.helpText.style.display = "block";
+      }
+
+      updateLives(lives) {
+        [...this.hud.children].forEach((heart, index) => {
+          heart.classList.toggle("empty", index >= lives);
+        });
+      }
+
+      showExitNotice() {
+        this.exitNotice.style.display = "block";
+      }
+    }
+
+
+    /* =========================================================
+       7. GAME OBJECTS — PLAYER, PLATFORMS, CHECKPOINTS, GOAL
+       These classes represent things in the game world.
+       ========================================================= */
+
+    class Platform {
+      constructor(data) {
+        this.x = data.x;
+        this.y = data.y;
+        this.previousX = data.x;
+        this.previousY = data.y;
+        this.baseX = data.x;
+        this.baseY = data.y;
+        this.width = data.width;
+        this.height = data.height || 18;
+
+        // baseColorState is the platform's starting color.
+        // colorState may change during play if toggleColors is enabled.
+        this.baseColorState = data.colorState;
+        this.colorState = data.colorState; // "green" or "blue"
+
+        this.angle = degToRad(data.angle || 0);
+        this.previousAngle = this.angle;
+        this.baseAngle = this.angle;
+        this.motion = data.motion || null;
+        this.rotationSpeed = degToRad(data.rotationSpeed || 0);
+        this.timeOffset = data.timeOffset || 0;
+
+        // Optional color-toggle behavior for Level 4 and future levels.
+        // stableDuration is intentionally exposed for easy designer tuning.
+        // The platform stays one color, plays a countdown warning pulse, then flips.
+        this.toggleColors = Boolean(data.toggleColors);
+        this.stableDuration = data.stableDuration || CONFIG.togglePlatforms.defaultStableDuration;
+        this.warningPulses = data.warningPulses || CONFIG.togglePlatforms.warningPulses;
+        this.warningDuration = this.warningPulses.reduce((sum, pulse) => sum + pulse, 0);
+        this.toggleCycleDuration = this.stableDuration + this.warningDuration;
+        this.toggleOffset = data.toggleOffset || 0;
+        this.warningPulseOn = false;
+        this.warningTimeRemaining = 0;
+      }
+
+      update(delta, elapsed) {
+        /*
+          Moving platform carry support:
+          Before moving, each platform saves its previous position/rotation.
+          The Game class uses the difference to carry the frog along if the
+          frog is standing/sticking to this platform.
+        */
+        this.previousX = this.x;
+        this.previousY = this.y;
+        this.previousAngle = this.angle;
+
+        if (this.motion) {
+          const t = elapsed + this.timeOffset;
+          const amount = Math.sin(t * this.motion.speed) * this.motion.distance;
+
+          if (this.motion.type === "horizontal") {
+            this.x = this.baseX + amount;
+          }
+
+          if (this.motion.type === "vertical") {
+            this.y = this.baseY + amount;
+          }
+        }
+
+        if (this.rotationSpeed) {
+          this.angle += this.rotationSpeed * delta;
+        }
+
+        if (this.toggleColors) {
+          /*
+            Flicker platform timing:
+            1. Hold the current color for stableDuration seconds.
+            2. Play three warning pulses: slow 0.5s, faster 0.25s, fastest 0.125s.
+            3. Switch to the other color and repeat.
+
+            For earlier levels, stableDuration defaults to 3 seconds so the
+            player has time to read the platform before the countdown begins.
+          */
+          const cycleTime = (elapsed + this.toggleOffset) % this.toggleCycleDuration;
+          const phase = Math.floor((elapsed + this.toggleOffset) / this.toggleCycleDuration);
+          const shouldUseBase = phase % 2 === 0;
+          this.colorState = shouldUseBase
+            ? this.baseColorState
+            : (this.baseColorState === "green" ? "blue" : "green");
+
+          this.warningPulseOn = false;
+          this.warningTimeRemaining = Math.max(0, this.toggleCycleDuration - cycleTime);
+
+          if (cycleTime >= this.stableDuration) {
+            let warningTime = cycleTime - this.stableDuration;
+            let elapsedPulseStart = 0;
+
+            for (const pulseLength of this.warningPulses) {
+              if (warningTime <= pulseLength) {
+                const halfPulse = pulseLength / 2;
+                this.warningPulseOn = (warningTime % halfPulse) < (halfPulse * 0.5);
+                break;
+              }
+              warningTime -= pulseLength;
+              elapsedPulseStart += pulseLength;
+            }
+          }
+        }
+      }
+
+      getDelta() {
+        return {
+          x: this.x - this.previousX,
+          y: this.y - this.previousY,
+          angle: this.angle - this.previousAngle
+        };
+      }
+
+      draw(ctx, camera) {
+        ctx.save();
+        ctx.translate(this.x - camera.x, this.y - camera.y);
+        ctx.rotate(this.angle);
+
+        // Platform body
+        ctx.fillStyle = CONFIG.colors[this.colorState];
+        ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+
+        // Toggle platforms get highlighted squares. During the countdown,
+        // these squares flash faster before the color changes.
+        if (this.toggleColors) {
+          const highlightAlpha = this.warningPulseOn ? 0.9 : 0.25;
+          ctx.fillStyle = `rgba(255,255,255,${highlightAlpha})`;
+
+          for (let x = -this.width / 2 + 8; x < this.width / 2 - 6; x += 22) {
+            ctx.fillRect(x, -this.height / 2 + 5, 10, 10);
+          }
+
+          if (this.warningPulseOn) {
+            ctx.strokeStyle = "rgba(255,230,109,0.95)";
+            ctx.lineWidth = 4;
+            ctx.strokeRect(-this.width / 2 + 2, -this.height / 2 + 2, this.width - 4, this.height - 4);
+          }
+        }
+
+        // Pixel outline and underside shadow
+        ctx.strokeStyle = "#f5ffe8";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-this.width / 2, -this.height / 2, this.width, this.height);
+
+        ctx.fillStyle = "rgba(0,0,0,0.22)";
+        ctx.fillRect(-this.width / 2, this.height / 2 - 4, this.width, 4);
+
+        ctx.restore();
+      }
+
+      getSurfaceCollision(player) {
+        /*
+          Universal platform attachment collision:
+          - Converts the frog center into platform-local space.
+          - Finds which side of the platform rectangle the frog is closest to.
+          - Returns a surface normal if the frog overlaps that side.
+          - The surface normal lets the Player decide whether it is floor,
+            wall, or ceiling contact.
+        */
+        if (player.colorState !== this.colorState) return null;
+
+        const local = worldToLocal(player.position, this);
+        const halfW = this.width / 2;
+        const halfH = this.height / 2;
+        const playerHalfW = player.width / 2;
+        const playerHalfH = player.height / 2;
+
+        const dx = Math.abs(local.x) - (halfW + playerHalfW);
+        const dy = Math.abs(local.y) - (halfH + playerHalfH);
+
+        if (dx > 0 || dy > 0) return null;
+
+        const overlapX = (halfW + playerHalfW) - Math.abs(local.x);
+        const overlapY = (halfH + playerHalfH) - Math.abs(local.y);
+
+        let localNormal;
+        let correctionLocal;
+
+        if (overlapX < overlapY) {
+          // Left or right side of the platform.
+          const sign = local.x < 0 ? -1 : 1;
+          localNormal = { x: sign, y: 0 };
+          correctionLocal = { x: local.x + sign * overlapX, y: local.y };
+        } else {
+          // Top or bottom side of the platform.
+          const sign = local.y < 0 ? -1 : 1;
+          localNormal = { x: 0, y: sign };
+          correctionLocal = { x: local.x, y: local.y + sign * overlapY };
+        }
+
+        const correctedWorld = localToWorld(correctionLocal, this);
+
+        const cos = Math.cos(this.angle);
+        const sin = Math.sin(this.angle);
+        const worldNormal = {
+          x: localNormal.x * cos - localNormal.y * sin,
+          y: localNormal.x * sin + localNormal.y * cos
+        };
+
+        return {
+          platform: this,
+          correctedWorld,
+          localNormal,
+          worldNormal
+        };
+      }
+
+      resolvePlayerCollision(player, input) {
+        const hit = this.getSurfaceCollision(player);
+        if (!hit) return false;
+
+        return player.resolvePlatformHit(hit, input);
+      }
+    }
+
+
+    class Checkpoint {
+      constructor(data) {
+        this.x = data.x;
+        this.y = data.y;
+        this.radius = data.radius || 26;
+        this.active = false;
+      }
+
+      check(player) {
+        const dx = player.position.x - this.x;
+        const dy = player.position.y - this.y;
+        const touched = Math.sqrt(dx * dx + dy * dy) < this.radius + player.width / 2;
+
+        if (touched) {
+          this.active = true;
+          return true;
+        }
+
+        return false;
+      }
+
+      draw(ctx, camera) {
+        ctx.save();
+        ctx.translate(this.x - camera.x, this.y - camera.y);
+
+        ctx.fillStyle = this.active ? CONFIG.colors.green : "#243149";
+        ctx.fillRect(-6, -34, 12, 52);
+
+        ctx.fillStyle = this.active ? CONFIG.colors.blue : "#6d7f99";
+        ctx.fillRect(0, -34, 30, 20);
+
+        ctx.strokeStyle = "#f5ffe8";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(0, -34, 30, 20);
+
+        ctx.restore();
+      }
+    }
+
+
+    class Goal {
+      constructor(data) {
+        this.x = data.x;
+        this.y = data.y;
+        this.radius = data.radius || 34;
+      }
+
+      check(player) {
+        const dx = player.position.x - this.x;
+        const dy = player.position.y - this.y;
+        return Math.sqrt(dx * dx + dy * dy) < this.radius + player.width / 2;
+      }
+
+      draw(ctx, camera, elapsed) {
+        const pulse = 1 + Math.sin(elapsed * 5) * 0.08;
+
+        ctx.save();
+        ctx.translate(this.x - camera.x, this.y - camera.y);
+        ctx.scale(pulse, pulse);
+
+        // Pixel portal / lily goal
+        ctx.fillStyle = "rgba(255,230,109,0.25)";
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius + 12, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = CONFIG.colors.green;
+        ctx.fillRect(-28, -8, 56, 16);
+        ctx.fillStyle = CONFIG.colors.blue;
+        ctx.fillRect(-12, -24, 24, 48);
+        ctx.fillStyle = "#ffe66d";
+        ctx.fillRect(-8, -8, 16, 16);
+
+        ctx.restore();
+      }
+    }
+
+
+    class Player {
+      constructor(assets, audio) {
+        this.assets = assets;
+        this.audio = audio;
+        this.width = CONFIG.player.width;
+        this.height = CONFIG.player.height;
+        this.position = createVector();
+        this.previousPosition = createVector();
+        this.velocity = createVector();
+        this.colorState = "green";
+        this.onGround = false;
+        this.groundPlatform = null;
+
+        // Attachment state is used for floors, walls, ceilings, and rotating
+        // surfaces. attachmentInputLock stores the direction held when sticking
+        // began. If the player keeps holding that same input, they stay stuck
+        // even when a rotating platform turns upside down.
+        this.attachment = null;
+
+        this.coyoteTimer = 0;
+        this.jumpBufferTimer = 0;
+        this.facing = 1;
+        this.animationTime = 0;
+      }
+
+      spawn(point) {
+        this.position.x = point.x;
+        this.position.y = point.y;
+        this.previousPosition.x = point.x;
+        this.previousPosition.y = point.y;
+        this.velocity.x = 0;
+        this.velocity.y = 0;
+        this.colorState = "green";
+        this.onGround = false;
+        this.groundPlatform = null;
+        this.attachment = null;
+        this.coyoteTimer = 0;
+        this.jumpBufferTimer = 0;
+      }
+
+      switchColor() {
+        this.colorState = this.colorState === "green" ? "blue" : "green";
+        this.audio.playSfx("switchSfx");
+
+        // Changing color intentionally breaks an attachment if the surface no
+        // longer matches. The next collision pass can reattach if valid.
+        if (this.attachment && this.attachment.platform.colorState !== this.colorState) {
+          this.detach();
+        }
+      }
+
+      detach() {
+        this.onGround = false;
+        this.groundPlatform = null;
+        this.attachment = null;
+      }
+
+      inputVector(input) {
+        return {
+          x: (input.isDown("arrowright", "d") ? 1 : 0) - (input.isDown("arrowleft", "a") ? 1 : 0),
+          y: (input.isDown("arrowdown", "s") ? 1 : 0) - (input.isDown("arrowup", "w") ? 1 : 0)
+        };
+      }
+
+      isHoldingLockedInput(input) {
+        if (!this.attachment?.inputLock) return false;
+        const lock = this.attachment.inputLock;
+
+        if (lock.x > 0 && !input.isDown("arrowright", "d")) return false;
+        if (lock.x < 0 && !input.isDown("arrowleft", "a")) return false;
+        if (lock.y > 0 && !input.isDown("arrowdown", "s")) return false;
+        if (lock.y < 0 && !input.isDown("arrowup", "w")) return false;
+
+        return true;
+      }
+
+      getRequiredInputForSurface(hit) {
+        /*
+          For a new attachment, the player must press toward the surface:
+          - Wall left side: press right.
+          - Wall right side: press left.
+          - Ceiling underside: press up.
+          - Floor/top side: press down.
+          This value is then locked, allowing rotating-platform continuity.
+        */
+        const n = hit.worldNormal;
+
+        if (Math.abs(n.x) > Math.abs(n.y)) {
+          return { x: n.x < 0 ? 1 : -1, y: 0 };
+        }
+
+        return { x: 0, y: n.y < 0 ? 1 : -1 };
+      }
+
+      isInputTowardSurface(input, hit) {
+        const required = this.getRequiredInputForSurface(hit);
+
+        if (required.x > 0) return input.isDown("arrowright", "d");
+        if (required.x < 0) return input.isDown("arrowleft", "a");
+        if (required.y > 0) return input.isDown("arrowdown", "s");
+        if (required.y < 0) return input.isDown("arrowup", "w");
+
+        return false;
+      }
+
+      beginAttachment(hit, inputLock) {
+        this.attachment = {
+          platform: hit.platform,
+          normal: hit.worldNormal,
+          inputLock
+        };
+
+        this.onGround = hit.worldNormal.y < -0.45;
+        this.groundPlatform = hit.platform;
+      }
+
+      resolvePlatformHit(hit, input) {
+        const normal = hit.worldNormal;
+
+        // Top-facing surfaces work like regular ground. The frog can land
+        // without holding a direction.
+        const isFloor = normal.y < -0.45;
+
+        // Walls and ceilings require active input toward that surface.
+        const canAttachByInput = this.isInputTowardSurface(input, hit);
+        const continuingLockedAttachment =
+          this.attachment?.platform === hit.platform && this.isHoldingLockedInput(input);
+
+        if (!isFloor && !canAttachByInput && !continuingLockedAttachment) {
+          return false;
+        }
+
+        this.position.x = hit.correctedWorld.x;
+        this.position.y = hit.correctedWorld.y;
+
+        const velocityIntoSurface =
+          this.velocity.x * normal.x + this.velocity.y * normal.y;
+
+        if (velocityIntoSurface < 0) {
+          this.velocity.x -= velocityIntoSurface * normal.x;
+          this.velocity.y -= velocityIntoSurface * normal.y;
+        }
+
+        const inputLock = isFloor
+          ? null
+          : (continuingLockedAttachment
+            ? this.attachment.inputLock
+            : this.getRequiredInputForSurface(hit));
+
+        this.beginAttachment(hit, inputLock);
+
+        if (isFloor) {
+          this.velocity.y = Math.min(0, this.velocity.y);
+        }
+
+        return true;
+      }
+
+      updateAttachedMotion(delta, input) {
+        if (!this.attachment) return false;
+
+        const n = this.attachment.normal;
+        const wallLike = Math.abs(n.x) > Math.abs(n.y);
+        const ceilingLike = n.y > 0.45;
+        const floorLike = n.y < -0.45;
+
+        /*
+          Important: floors are NOT sticky attachments.
+          Earlier versions accidentally required the player to hold "down"
+          because floor contact reused the wall/ceiling attachment lock.
+          This branch exits before checking heldLock so Space can jump by itself.
+        */
+        if (floorLike) {
+          this.onGround = true;
+          this.groundPlatform = this.attachment.platform;
+          return false;
+        }
+
+        const platformStillMatches = this.attachment.platform.colorState === this.colorState;
+        const heldLock = this.isHoldingLockedInput(input);
+
+        if (!platformStillMatches || !heldLock) {
+          this.detach();
+          return false;
+        }
+
+        if (wallLike) {
+          // While stuck to a vertical wall, pressing up climbs.
+          // Normal difficulty disables passive sliding; Hard keeps the slide.
+          this.velocity.x = 0;
+          this.velocity.y = input.isDown("arrowup", "w")
+            ? -CONFIG.attachment.climbSpeed
+            : (CONFIG.difficulty === "hard" ? CONFIG.attachment.slideSpeed : 0);
+        } else if (ceilingLike) {
+          // Ceiling attachment: hold up to stay stuck. Sideways movement still
+          // works, but gravity is suppressed while attached.
+          const move = (input.isDown("arrowright", "d") ? 1 : 0) - (input.isDown("arrowleft", "a") ? 1 : 0);
+          this.velocity.x = lerp(this.velocity.x, move * CONFIG.player.speed * 0.55, 0.16);
+          this.velocity.y = 0;
+        }
+
+        // Jumping while attached now simply releases the frog with an upward hop.
+        // This intentionally removes the previous "opposite momentum" wall jump.
+        if (input.wasPressed(" ")) {
+          this.velocity.y = CONFIG.attachment.attachJumpVertical;
+          this.detach();
+          this.audio.playSfx("jumpSfx");
+          return true;
+        }
+
+        return true;
+      }
+
+      update(delta, input, platforms) {
+        this.previousPosition.x = this.position.x;
+        this.previousPosition.y = this.position.y;
+
+        this.animationTime += delta;
+
+        if (input.wasPressed("enter", "shift")) {
+          this.switchColor();
+        }
+
+        const attachedHandled = this.updateAttachedMotion(delta, input);
+
+        // Horizontal movement uses stronger control on ground and softer control in air.
+        const left = input.isDown("arrowleft", "a");
+        const right = input.isDown("arrowright", "d");
+        const movement = (right ? 1 : 0) - (left ? 1 : 0);
+        const control = this.onGround ? 1 : CONFIG.player.airControl;
+
+        if (movement !== 0) {
+          this.facing = movement;
+        }
+
+        if (!attachedHandled) {
+          const targetSpeed = movement * CONFIG.player.speed;
+          this.velocity.x = lerp(this.velocity.x, targetSpeed, 0.18 * control);
+
+          /*
+            Difficulty rule:
+            Normal prevents passive movement caused by steep angled platforms.
+            If the frog is standing still on a platform tilted beyond 45 degrees,
+            horizontal drift is dampened instead of letting gravity/angle effects
+            slide the player around. Hard leaves the current behavior untouched.
+          */
+          if (
+            CONFIG.difficulty === "normal" &&
+            this.onGround &&
+            this.groundPlatform &&
+            Math.abs(Math.sin(this.groundPlatform.angle)) > 0.707 &&
+            movement === 0
+          ) {
+            this.velocity.x = 0;
+          }
+        }
+
+        // Jump buffering makes jumps feel responsive.
+        if (input.wasPressed(" ")) {
+          this.jumpBufferTimer = CONFIG.player.jumpBuffer;
+        } else {
+          this.jumpBufferTimer -= delta;
+        }
+
+        // Coyote time allows jumping very shortly after leaving ground.
+        if (this.onGround) {
+          this.coyoteTimer = CONFIG.player.coyoteTime;
+        } else {
+          this.coyoteTimer -= delta;
+        }
+
+        if (!attachedHandled && this.jumpBufferTimer > 0 && this.coyoteTimer > 0) {
+          this.velocity.y = CONFIG.player.jumpVelocity;
+          this.onGround = false;
+          this.groundPlatform = null;
+          this.attachment = null;
+          this.jumpBufferTimer = 0;
+          this.coyoteTimer = 0;
+          this.audio.playSfx("jumpSfx");
+        }
+
+        // Gravity is reduced/suppressed while attached to walls/ceilings.
+        if (!attachedHandled) {
+          this.velocity.y += CONFIG.player.gravity * delta;
+        }
+
+        this.velocity.y = clamp(this.velocity.y, -Infinity, CONFIG.player.terminalVelocity);
+
+        // Apply velocity.
+        this.position.x += this.velocity.x * delta;
+        this.position.y += this.velocity.y * delta;
+
+        // Re-check ground/attachment each frame; matching platform collision can set it true.
+        this.onGround = false;
+        this.groundPlatform = null;
+        if (!attachedHandled) this.attachment = null;
+
+        for (const platform of platforms) {
+          if (platform.resolvePlayerCollision(this, input)) break;
+        }
+      }
+
+      draw(ctx, camera) {
+        const frameSize = 32;
+        const row = this.colorState === "green" ? 0 : 1;
+
+        let frame = 0;
+        if (!this.onGround && !this.attachment) {
+          frame = 2;
+        } else if (Math.abs(this.velocity.x) > 30 || Math.abs(this.velocity.y) > 30) {
+          frame = Math.floor(this.animationTime * 8) % 2;
+        } else if (Math.floor(this.animationTime * 2) % 8 === 0) {
+          frame = 3;
+        }
+
+        ctx.save();
+        ctx.translate(Math.round(this.position.x - camera.x), Math.round(this.position.y - camera.y));
+
+        if (this.facing < 0) {
+          ctx.scale(-1, 1);
+        }
+
+        // Tiny color aura helps the user understand current attach color.
+        ctx.fillStyle = this.colorState === "green"
+          ? "rgba(119,227,108,0.22)"
+          : "rgba(86,184,255,0.22)";
+        ctx.fillRect(-this.width / 2 - 5, -this.height / 2 - 3, this.width + 10, this.height + 8);
+
+        ctx.drawImage(
+          this.assets.frogSprite,
+          frame * frameSize,
+          row * frameSize,
+          frameSize,
+          frameSize,
+          -frameSize / 2,
+          -frameSize / 2,
+          frameSize,
+          frameSize
+        );
+
+        ctx.restore();
+      }
+    }
+
+
+    /* =========================================================
+       8. LEVEL DATA — MULTI-LEVEL COURSE + FUTURE EXPANSION
+       Designers can add or tune levels by copying this object structure.
+       Each level has a spawn point, goal, checkpoint list, and platforms.
+       Later content can be added without rewriting the engine.
+       ========================================================= */
+
+    const LEVELS = [
+      {
+        name: "Level 1 — Pond Ascent",
+        spawn: { x: 90, y: 760 },
+        goal: { x: 1370, y: 250 },
+        checkpoints: [
+          { x: 760, y: 470 }
+        ],
+        platforms: [
+          { x: 110, y: 820, width: 190, height: 22, colorState: "green", angle: 0 },
+          { x: 300, y: 725, width: 170, height: 20, colorState: "blue", angle: -12 },
+          { x: 510, y: 660, width: 150, height: 20, colorState: "green", angle: 10 },
+          { x: 700, y: 585, width: 160, height: 20, colorState: "blue", angle: -16, motion: { type: "vertical", distance: 55, speed: 1.4 } },
+          { x: 870, y: 495, width: 150, height: 20, colorState: "green", angle: 18 },
+          { x: 1050, y: 420, width: 175, height: 20, colorState: "blue", angle: -8, motion: { type: "horizontal", distance: 70, speed: 1.2 }, timeOffset: 1.3 },
+          { x: 1235, y: 335, width: 140, height: 20, colorState: "green", angle: 22, rotationSpeed: 12 },
+          { x: 1390, y: 300, width: 150, height: 20, colorState: "blue", angle: 0 },
+          { x: 580, y: 850, width: 180, height: 20, colorState: "green", angle: 0, motion: { type: "horizontal", distance: 80, speed: 1.1 } },
+          { x: 935, y: 820, width: 180, height: 20, colorState: "blue", angle: 8 }
+        ]
+      },
+
+      {
+        name: "Level 2 — Reed Switchbacks",
+        spawn: { x: 80, y: 800 },
+        goal: { x: 2070, y: 260 },
+        checkpoints: [
+          { x: 780, y: 540 },
+          { x: 1460, y: 360 }
+        ],
+        platforms: [
+          { x: 100, y: 850, width: 180, height: 22, colorState: "green", angle: 0 },
+          { x: 285, y: 760, width: 140, height: 20, colorState: "blue", angle: 18 },
+          { x: 470, y: 690, width: 130, height: 20, colorState: "green", angle: -18, motion: { type: "vertical", distance: 70, speed: 1.7 } },
+          { x: 650, y: 600, width: 140, height: 20, colorState: "blue", angle: 12 },
+          { x: 830, y: 545, width: 120, height: 20, colorState: "green", angle: -10, rotationSpeed: 10 },
+          { x: 1040, y: 510, width: 150, height: 20, colorState: "blue", angle: 0, motion: { type: "horizontal", distance: 110, speed: 1.45 }, timeOffset: 0.6 },
+          { x: 1235, y: 445, width: 120, height: 20, colorState: "green", angle: 24 },
+          { x: 1425, y: 380, width: 140, height: 20, colorState: "blue", angle: -20, motion: { type: "vertical", distance: 65, speed: 1.9 }, timeOffset: 1.2 },
+          { x: 1625, y: 340, width: 125, height: 20, colorState: "green", angle: 8, rotationSpeed: -14 },
+          { x: 1815, y: 295, width: 130, height: 20, colorState: "blue", angle: 17 },
+          { x: 2020, y: 310, width: 180, height: 22, colorState: "green", angle: -6 }
+        ]
+      },
+
+      {
+        name: "Level 3 — Moonlit Marsh Run",
+        spawn: { x: 80, y: 835 },
+        goal: { x: 2850, y: 210 },
+        checkpoints: [
+          { x: 880, y: 575 },
+          { x: 1720, y: 420 },
+          { x: 2380, y: 300 }
+        ],
+        platforms: [
+          { x: 100, y: 880, width: 180, height: 22, colorState: "green", angle: 0 },
+          { x: 275, y: 790, width: 125, height: 20, colorState: "blue", angle: -14 },
+          { x: 455, y: 710, width: 115, height: 20, colorState: "green", angle: 18, motion: { type: "horizontal", distance: 95, speed: 1.8 } },
+          { x: 645, y: 640, width: 120, height: 20, colorState: "blue", angle: -18, rotationSpeed: 10 },
+          { x: 850, y: 610, width: 135, height: 20, colorState: "green", angle: 10, motion: { type: "vertical", distance: 80, speed: 2.0 }, timeOffset: 0.7 },
+          { x: 1060, y: 535, width: 110, height: 20, colorState: "blue", angle: 24 },
+          { x: 1250, y: 480, width: 115, height: 20, colorState: "green", angle: -22, rotationSpeed: -18 },
+          { x: 1455, y: 455, width: 125, height: 20, colorState: "blue", angle: 0, motion: { type: "horizontal", distance: 125, speed: 1.65 }, timeOffset: 1.5 },
+          { x: 1660, y: 425, width: 110, height: 20, colorState: "green", angle: 20 },
+          { x: 1850, y: 360, width: 120, height: 20, colorState: "blue", angle: -16, motion: { type: "vertical", distance: 75, speed: 2.15 } },
+          { x: 2050, y: 325, width: 105, height: 20, colorState: "green", angle: 14, rotationSpeed: 20 },
+          { x: 2240, y: 300, width: 115, height: 20, colorState: "blue", angle: -10 },
+          { x: 2435, y: 290, width: 110, height: 20, colorState: "green", angle: 22, motion: { type: "horizontal", distance: 90, speed: 2.0 }, timeOffset: 0.3 },
+          { x: 2645, y: 250, width: 105, height: 20, colorState: "blue", angle: -22, rotationSpeed: -16 },
+          { x: 2830, y: 260, width: 170, height: 22, colorState: "green", angle: 0 }
+        ]
+      },
+
+      {
+        name: "Level 4 — Flicker Lilyworks",
+        spawn: { x: 80, y: 835 },
+        goal: { x: 3050, y: 250 },
+        checkpoints: [
+          { x: 980, y: 560 },
+          { x: 2050, y: 405 }
+        ],
+        platforms: [
+          { x: 100, y: 880, width: 180, height: 22, colorState: "green", angle: 0 },
+          { x: 315, y: 790, width: 135, height: 20, colorState: "blue", angle: -10, toggleColors: true, stableDuration: 1.8 },
+          { x: 515, y: 710, width: 130, height: 20, colorState: "green", angle: 14, toggleColors: true, stableDuration: 1.4, toggleOffset: 0.6 },
+          { x: 720, y: 650, width: 120, height: 20, colorState: "blue", angle: -18, motion: { type: "vertical", distance: 65, speed: 1.5 }, toggleColors: true, stableDuration: 2.0 },
+          { x: 940, y: 585, width: 150, height: 20, colorState: "green", angle: 8 },
+          { x: 1160, y: 520, width: 125, height: 20, colorState: "blue", angle: 22, toggleColors: true, stableDuration: 1.25, toggleOffset: 0.2 },
+          { x: 1375, y: 465, width: 130, height: 20, colorState: "green", angle: -18, motion: { type: "horizontal", distance: 100, speed: 1.6 }, toggleColors: true, stableDuration: 1.6, toggleOffset: 0.9 },
+          { x: 1610, y: 430, width: 120, height: 20, colorState: "blue", angle: 16, rotationSpeed: 8, toggleColors: true, stableDuration: 1.9 },
+          { x: 1835, y: 405, width: 140, height: 20, colorState: "green", angle: -10 },
+          { x: 2070, y: 440, width: 120, height: 20, colorState: "blue", angle: 22, motion: { type: "vertical", distance: 85, speed: 1.8 }, toggleColors: true, stableDuration: 1.35 },
+          { x: 2300, y: 365, width: 115, height: 20, colorState: "green", angle: -24, toggleColors: true, stableDuration: 1.55, toggleOffset: 0.5 },
+          { x: 2525, y: 315, width: 120, height: 20, colorState: "blue", angle: 18, toggleColors: true, stableDuration: 1.2, toggleOffset: 0.1 },
+          { x: 2760, y: 270, width: 130, height: 20, colorState: "green", angle: -12, motion: { type: "horizontal", distance: 90, speed: 1.7 }, toggleColors: true, stableDuration: 1.75 },
+          { x: 3020, y: 300, width: 180, height: 22, colorState: "blue", angle: 0 }
+        ]
+      },
+
+      {
+        name: "Level 5 — Gravity Reed Climb",
+        spawn: { x: 90, y: 850 },
+        goal: { x: 3160, y: 220 },
+        checkpoints: [
+          { x: 760, y: 560 },
+          { x: 1620, y: 350 },
+          { x: 2470, y: 300 }
+        ],
+        platforms: [
+          { x: 110, y: 890, width: 180, height: 22, colorState: "green", angle: 0 },
+
+          // Vertical wall section. Hold toward the wall to stick, then press up to climb.
+          { x: 330, y: 730, width: 220, height: 24, colorState: "blue", angle: 90 },
+          { x: 520, y: 610, width: 150, height: 20, colorState: "green", angle: 0 },
+          { x: 690, y: 520, width: 230, height: 24, colorState: "blue", angle: -90, motion: { type: "vertical", distance: 70, speed: 1.25 } },
+
+          // Ceiling traversal. Hold up to stick underneath.
+          { x: 930, y: 430, width: 240, height: 22, colorState: "green", angle: 180 },
+          { x: 1160, y: 480, width: 140, height: 20, colorState: "blue", angle: 18 },
+
+          // Rotating attachment test. Once attached, keep holding the original
+          // input even if the platform turns over.
+          { x: 1390, y: 405, width: 190, height: 22, colorState: "green", angle: 0, rotationSpeed: 24 },
+          { x: 1620, y: 380, width: 170, height: 20, colorState: "blue", angle: -12 },
+
+          { x: 1840, y: 320, width: 240, height: 24, colorState: "green", angle: 90 },
+          { x: 2045, y: 245, width: 145, height: 20, colorState: "blue", angle: 0 },
+          { x: 2240, y: 270, width: 230, height: 24, colorState: "green", angle: -90, motion: { type: "horizontal", distance: 80, speed: 1.3 } },
+
+          { x: 2470, y: 320, width: 210, height: 22, colorState: "blue", angle: 180 },
+          { x: 2690, y: 280, width: 120, height: 20, colorState: "green", angle: -18, rotationSpeed: -16 },
+          { x: 2910, y: 245, width: 120, height: 20, colorState: "blue", angle: 18 },
+          { x: 3140, y: 270, width: 180, height: 22, colorState: "green", angle: 0 }
+        ]
+      }
+    ];
+
+
+    /* =========================================================
+       9. GAME ENGINE — MAIN LOOP AND STATE MANAGEMENT
+       Coordinates the current screen, level, physics, drawing, and
+       win/loss conditions.
+       ========================================================= */
+
+    class Game {
+      constructor() {
+        this.canvas = document.getElementById("gameCanvas");
+        this.ctx = this.canvas.getContext("2d");
+        this.ctx.imageSmoothingEnabled = false;
+
+        this.input = new InputManager();
+        this.assets = new AssetManager();
+        this.audio = new AudioManager(CONFIG.audio);
+        this.ui = new UIManager(this, this.audio);
+
+        this.player = new Player(this.assets, this.audio);
+        this.platforms = [];
+        this.checkpoints = [];
+        this.goal = null;
+
+        this.state = "menu"; // menu, loading, playing, paused, gameOver, exited
+        this.previousState = "menu";
+        this.currentLevelIndex = 0;
+        this.lives = CONFIG.level.startLives;
+        this.activeRespawnPoint = null;
+        this.camera = createVector();
+        this.elapsed = 0;
+        this.lastTime = performance.now();
+        this.loadingTimer = null;
+
+        this.resize();
+        window.addEventListener("resize", () => this.resize());
+
+        this.audio.playMusic("menuMusic");
+        requestAnimationFrame((time) => this.loop(time));
+      }
+
+      resize() {
+        const dpr = window.devicePixelRatio || 1;
+        this.canvas.width = Math.floor(window.innerWidth * dpr);
+        this.canvas.height = Math.floor(window.innerHeight * dpr);
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        this.ctx.imageSmoothingEnabled = false;
+      }
+
+      setDifficulty(value) {
+        CONFIG.difficulty = value;
+      }
+
+      loadLevel(index) {
+        const data = LEVELS[index];
+
+        this.platforms = data.platforms.map(platformData => new Platform(platformData));
+        this.checkpoints = data.checkpoints.map(checkpointData => new Checkpoint(checkpointData));
+        this.goal = new Goal(data.goal);
+
+        this.activeRespawnPoint = { ...data.spawn };
+        this.player.spawn(data.spawn);
+        this.lives = CONFIG.level.startLives;
+        this.ui.updateLives(this.lives);
+
+        // Reset the camera near the level start so each stage begins clearly.
+        this.camera.x = Math.max(0, data.spawn.x - window.innerWidth * 0.38);
+        this.camera.y = Math.max(-160, data.spawn.y - window.innerHeight * 0.62);
+      }
+
+      startLevel() {
+        this.currentLevelIndex = 0;
+        this.queueLevelLoad(this.currentLevelIndex);
+      }
+
+      loadLevelFromSelect(index) {
+        this.currentLevelIndex = index;
+        this.queueLevelLoad(index);
+      }
+
+      queueLevelLoad(index) {
+        const level = LEVELS[index];
+        this.state = "loading";
+        this.ui.hideLevelSelect();
+        this.ui.hideMenu();
+        this.ui.hideGameOver();
+        this.ui.hidePause();
+        this.ui.showLoading(index, level.name);
+        this.audio.playMusic("levelMusic");
+
+        clearTimeout(this.loadingTimer);
+        this.loadingTimer = setTimeout(() => {
+          this.loadLevel(index);
+          this.elapsed = 0;
+          this.state = "playing";
+          this.ui.hideLoading();
+          this.ui.showHud();
+        }, 1200);
+      }
+
+      restartLevel() {
+        clearTimeout(this.loadingTimer);
+        this.ui.hidePause();
+        this.ui.hideGameOver();
+        this.queueLevelLoad(this.currentLevelIndex);
+      }
+
+      completeLevel() {
+        this.audio.playSfx("goalSfx");
+
+        if (this.currentLevelIndex < LEVELS.length - 1) {
+          this.currentLevelIndex += 1;
+          this.queueLevelLoad(this.currentLevelIndex);
+        } else {
+          // Prototype ending: after final goal, return to the main menu.
+          this.returnToMenu();
+        }
+      }
+
+      pauseGame() {
+        if (this.state !== "playing") return;
+        this.previousState = this.state;
+        this.state = "paused";
+        this.ui.showPause();
+      }
+
+      resumeGame() {
+        if (this.state !== "paused") return;
+        this.state = "playing";
+        this.ui.hidePause();
+      }
+
+      returnToMenu() {
+        clearTimeout(this.loadingTimer);
+        this.state = "menu";
+        this.audio.playMusic("menuMusic");
+        this.ui.showMenu();
+      }
+
+      exitGame() {
+        clearTimeout(this.loadingTimer);
+        this.state = "exited";
+        this.audio.stopMusic();
+        this.ui.showMenu();
+        this.ui.showExitNotice();
+
+        // This works only if the browser allows script-created tabs to close.
+        window.close();
+      }
+
+      loseLife() {
+        this.lives -= 1;
+        this.audio.playSfx("deathSfx");
+        this.ui.updateLives(this.lives);
+
+        if (this.lives <= 0) {
+          this.gameOver();
+          return;
+        }
+
+        this.player.spawn(this.activeRespawnPoint);
+      }
+
+      gameOver() {
+        this.state = "gameOver";
+        this.audio.playMusic("gameOverMusic");
+        this.ui.showGameOver();
+      }
+
+      carryPlayerWithPlatform() {
+        /*
+          Fix for moving platforms:
+          If the frog was standing on a platform before platforms moved this
+          frame, move the frog by that platform's position/rotation delta.
+          This keeps the frog riding platforms even when the player stands still.
+        */
+        const carrier = this.player.groundPlatform || this.player.attachment?.platform;
+        if (!carrier) return;
+
+        const delta = carrier.getDelta();
+        this.player.position.x += delta.x;
+        this.player.position.y += delta.y;
+        this.player.previousPosition.x += delta.x;
+        this.player.previousPosition.y += delta.y;
+
+        if (delta.angle !== 0) {
+          const relX = this.player.position.x - carrier.x;
+          const relY = this.player.position.y - carrier.y;
+          const cos = Math.cos(delta.angle);
+          const sin = Math.sin(delta.angle);
+          const rotatedX = relX * cos - relY * sin;
+          const rotatedY = relX * sin + relY * cos;
+
+          this.player.position.x = carrier.x + rotatedX;
+          this.player.position.y = carrier.y + rotatedY;
+          this.player.previousPosition.x = this.player.position.x;
+          this.player.previousPosition.y = this.player.position.y;
+        }
+      }
+
+      handleGlobalInput() {
+        if (this.input.wasPressed("escape")) {
+          if (this.state === "playing") {
+            this.pauseGame();
+          } else if (this.state === "paused") {
+            this.resumeGame();
+          }
+        }
+      }
+
+      update(delta) {
+        this.handleGlobalInput();
+
+        if (this.state !== "playing") return;
+
+        this.elapsed += delta;
+
+        this.platforms.forEach(platform => platform.update(delta, this.elapsed));
+        this.carryPlayerWithPlatform();
+        this.player.update(delta, this.input, this.platforms);
+
+        // Checkpoint support for longer level designs.
+        this.checkpoints.forEach(checkpoint => {
+          if (!checkpoint.active && checkpoint.check(this.player)) {
+            this.activeRespawnPoint = { x: checkpoint.x, y: checkpoint.y - 20 };
+          }
+        });
+
+        if (this.player.position.y > CONFIG.level.fallDeathY) {
+          this.loseLife();
+        }
+
+        if (this.goal.check(this.player)) {
+          this.completeLevel();
+        }
+
+        // Smooth camera follows the frog across longer levels.
+        const targetX = this.player.position.x - window.innerWidth * 0.38;
+        const targetY = this.player.position.y - window.innerHeight * 0.62;
+        this.camera.x = lerp(this.camera.x, targetX, 0.08);
+        this.camera.y = lerp(this.camera.y, targetY, 0.08);
+        this.camera.x = clamp(this.camera.x, 0, 3200);
+        this.camera.y = clamp(this.camera.y, -180, 980);
+      }
+
+      drawBackground() {
+        const ctx = this.ctx;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, CONFIG.backgroundSkyTop);
+        sky.addColorStop(1, CONFIG.backgroundSkyBottom);
+
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        // Pixel grid stars / bubbles.
+        ctx.fillStyle = "rgba(245,255,232,0.14)";
+        for (let i = 0; i < 90; i++) {
+          const x = (i * 137 - this.camera.x * 0.18) % (w + 60) - 30;
+          const y = (i * 83 - this.camera.y * 0.10) % (h + 60) - 30;
+          ctx.fillRect(Math.round(x), Math.round(y), 3, 3);
+        }
+
+        // Bottom danger fog hint.
+        ctx.fillStyle = "rgba(255,92,122,0.16)";
+        const deathLineY = CONFIG.level.fallDeathY - this.camera.y;
+        ctx.fillRect(0, deathLineY, w, h - deathLineY);
+      }
+
+      draw() {
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        this.drawBackground();
+
+        if (["playing", "paused", "gameOver", "loading"].includes(this.state)) {
+          this.goal?.draw(ctx, this.camera, this.elapsed);
+          this.checkpoints.forEach(checkpoint => checkpoint.draw(ctx, this.camera));
+          this.platforms.forEach(platform => platform.draw(ctx, this.camera));
+          this.player.draw(ctx, this.camera);
+        }
+      }
+
+      loop(time) {
+        const delta = Math.min((time - this.lastTime) / 1000, 1 / 30);
+        this.lastTime = time;
+
+        this.update(delta);
+        this.draw();
+        this.input.clearFramePresses();
+
+        requestAnimationFrame((nextTime) => this.loop(nextTime));
+      }
+    }
+
+    // Boot the game after all classes and configuration have loaded.
+    const game = new Game();
+  </script>
+</body>
+</html>
